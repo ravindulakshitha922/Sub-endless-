@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RUNNER X - 4K Endless Subway Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            background: #0a0a0a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: pan-x pan-y;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 450px; /* mobile aspect */
+            max-height: 100vh;
+            overflow: hidden;
+            border-radius: 0;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            background: #1a1a2e;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+            image-rendering: crisp-edges; /* fallback */
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+            touch-action: none;
+        }
+
+        #uiOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .topPanel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+            padding: 12px 18px;
+            border-radius: 50px;
+            margin: 10px 5px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: 1px solid rgba(255,255,255,0.2);
+            pointer-events: auto;
+        }
+
+        .collectibles {
+            display: flex;
+            gap: 25px;
+        }
+
+        .collectibleItem {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .icon {
+            font-size: 1.8rem;
+            filter: drop-shadow(0 0 8px gold);
+        }
+
+        .scoreBoard {
+            background: rgba(0,0,0,0.6);
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-size: 1.4rem;
+            letter-spacing: 2px;
+            color: #ffd966;
+            border: 1px solid #ffb347;
+        }
+
+        .controlsInfo {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 30px;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            padding: 10px 20px;
+            border-radius: 40px;
+            align-self: center;
+            font-size: 1rem;
+            color: #ccc;
+            border: 1px solid #ffffff30;
+        }
+
+        .powerupBadge {
+            background: rgba(255,215,0,0.3);
+            border: 2px solid gold;
+            border-radius: 30px;
+            padding: 8px 20px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: gold;
+            text-align: center;
+            backdrop-filter: blur(8px);
+            width: fit-content;
+            margin: 0 auto 20px;
+        }
+
+        #restartBtn {
+            pointer-events: auto;
+            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            border: none;
+            color: white;
+            font-size: 1.3rem;
+            padding: 15px 40px;
+            border-radius: 60px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 10px 25px #ff416c90;
+            border: 2px solid white;
+            margin-bottom: 40px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #restartBtn:active {
+            transform: scale(0.95);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .bottomUI {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="450" height="900"></canvas>
+        <div id="uiOverlay">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="topPanel">
+                    <div class="collectibles">
+                        <div class="collectibleItem"><span class="icon">🪙</span> <span id="coinCount">0</span></div>
+                        <div class="collectibleItem"><span class="icon">🛡️</span> <span id="shieldCount">0</span></div>
+                        <div class="collectibleItem"><span class="icon">🧲</span> <span id="magnetCount">0</span></div>
+                    </div>
+                </div>
+                <div class="scoreBoard" id="scoreDisplay">0000</div>
+            </div>
+
+            <div class="bottomUI">
+                <div id="activePowerup" class="powerupBadge hidden">🛡️ SHIELD ACTIVE</div>
+                <div class="controlsInfo">
+                    <span>⬅️ SWIPE LEFT</span>
+                    <span>➡️ SWIPE RIGHT</span>
+                    <span>⬆️ JUMP</span>
+                </div>
+                <button id="restartBtn" class="hidden">↻ RESTART</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Mobile full screen layout
+            function resizeCanvas() {
+                const container = document.getElementById('gameContainer');
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // ========== GAME STATE ==========
+            let gameActive = true;
+            let score = 0;
+            let coins = 0;
+            let shields = 0;      // protection cards
+            let magnets = 0;       // magnetic cards
+            let powerUpActive = { shield: false, magnet: false };
+            let powerUpTimer = { shield: 0, magnet: 0 };
+            const POWERUP_DURATION = 300; // frames ~5 seconds at 60fps
+
+            // Player
+            let player = {
+                x: 2,              // lane 0,1,2,3 (4 lanes)
+                y: 2,              // lane position? we use row concept
+                lane: 1,           // 0-3
+                height: 1.5,
+                width: 0.8,
+                color: '#00ffff'
+            };
+
+            // World
+            let lanes = [0.2, 0.4, 0.6, 0.8]; // relative x positions
+            let scrollSpeed = 0.015;
+            const BASE_SPEED = 0.015;
+            let gameSpeed = BASE_SPEED;
+            let obstacles = [];
+            let collectibles = [];
+            let frame = 0;
+            let level = 1;
+
+            // Input handling (touch)
+            let touchStartX = 0, touchStartY = 0;
+            let touchMoved = false;
+            const SWIPE_THRESHOLD = 30;
+
+            // ========== HELPER FUNCTIONS ==========
+            function formatScore(scr) {
+                return String(scr).padStart(4, '0').slice(0, 4);
+            }
+
+            function updateUI() {
+                document.getElementById('coinCount').innerText = coins;
+                document.getElementById('shieldCount').innerText = shields;
+                document.getElementById('magnetCount').innerText = magnets;
+                document.getElementById('scoreDisplay').innerText = formatScore(score);
+                
+                const powerDiv = document.getElementById('activePowerup');
+                if (powerUpActive.shield) {
+                    powerDiv.classList.remove('hidden');
+                    powerDiv.innerHTML = '🛡️ SHIELD ACTIVE';
+                } else if (powerUpActive.magnet) {
+                    powerDiv.classList.remove('hidden');
+                    powerDiv.innerHTML = '🧲 MAGNET ACTIVE';
+                } else {
+                    powerDiv.classList.add('hidden');
+                }
+            }
+
+            // ========== POWER-UP ACTIVATION ==========
+            function useShield() {
+                if (shields > 0 && !powerUpActive.shield && !powerUpActive.magnet) {
+                    shields--;
+                    powerUpActive.shield = true;
+                    powerUpTimer.shield = POWERUP_DURATION;
+                }
+            }
+
+            function useMagnet() {
+                if (magnets > 0 && !powerUpActive.magnet && !powerUpActive.shield) {
+                    magnets--;
+                    powerUpActive.magnet = true;
+                    powerUpTimer.magnet = POWERUP_DURATION;
+                }
+            }
+
+            // ========== GAME LOGIC UPDATE ==========
+            function updateGame() {
+                if (!gameActive) return;
+
+                // Increase difficulty over time
+                gameSpeed = BASE_SPEED + Math.floor(score / 500) * 0.005;
+                level = 1 + Math.floor(score / 300);
+
+                // Move obstacles
+                for (let i = obstacles.length-1; i >= 0; i--) {
+                    obstacles[i].y += gameSpeed;
+                    if (obstacles[i].y > 1.2) {
+                        obstacles.splice(i, 1);
+                    }
+                }
+
+                // Move collectibles
+                for (let i = collectibles.length-1; i >= 0; i--) {
+                    collectibles[i].y += gameSpeed;
+                    if (collectibles[i].y > 1.2) {
+                        collectibles.splice(i, 1);
+                    }
+                }
+
+                // Spawn obstacles (with increasing rate)
+                if (frame % Math.max(40, 60 - level*2) === 0 && gameActive) {
+                    if (Math.random() < 0.5) { // obstacle
+                        let lane = Math.floor(Math.random() * 4);
+                        obstacles.push({
+                            x: lanes[lane],
+                            y: -0.1,
+                            width: 0.12,
+                            height: 0.15,
+                            type: 'train',
+                            color: '#ff5555'
+                        });
+                    }
+                }
+
+                // Spawn collectibles (coins, powerups)
+                if (frame % 25 === 0 && gameActive) {
+                    if (Math.random() < 0.7) { // coin
+                        let lane = Math.floor(Math.random() * 4);
+                        collectibles.push({
+                            x: lanes[lane],
+                            y: -0.05,
+                            width: 0.07,
+                            height: 0.1,
+                            type: 'coin',
+                            color: 'gold',
+                            icon: '🪙'
+                        });
+                    } else {
+                        // powerup card
+                        let lane = Math.floor(Math.random() * 4);
+                        let r = Math.random();
+                        let type = r < 0.5 ? 'shield' : 'magnet';
+                        collectibles.push({
+                            x: lanes[lane],
+                            y: -0.05,
+                            width: 0.09,
+                            height: 0.12,
+                            type: type,
+                            color: type === 'shield' ? '#3a86ff' : '#9d4edd',
+                            icon: type === 'shield' ? '🛡️' : '🧲'
+                        });
+                    }
+                }
+
+                // ========== COLLISION DETECTION ==========
+                // Player hitbox (lower body)
+                let playerLeft = lanes[player.lane] - 0.1;
+                let playerRight = lanes[player.lane] + 0.1;
+                let playerTop = 0.85;  // near bottom of screen
+                let playerBottom = 1.0;
+
+                // Collectibles collision
+                for (let i = collectibles.length-1; i >= 0; i--) {
+                    let c = collectibles[i];
+                    let cLeft = c.x - c.width/2;
+                    let cRight = c.x + c.width/2;
+                    let cTop = c.y - c.height/2;
+                    let cBottom = c.y + c.height/2;
+
+                    if (playerLeft < cRight && playerRight > cLeft && playerTop < cBottom && playerBottom > cTop) {
+                        // collect
+                        if (c.type === 'coin') {
+                            coins++;
+                            score += 10;
+                        } else if (c.type === 'shield') {
+                            shields++;
+                            score += 20;
+                        } else if (c.type === 'magnet') {
+                            magnets++;
+                            score += 20;
+                        }
+                        collectibles.splice(i, 1);
+                    }
+                    
+                    // Magnet effect: pull coins if magnet active
+                    if (powerUpActive.magnet && c.type === 'coin') {
+                        let dx = lanes[player.lane] - c.x;
+                        let dy = (0.95 - c.y);
+                        c.x += dx * 0.02;
+                        c.y += dy * 0.02;
+                    }
+                }
+
+                // Obstacle collision
+                for (let i = obstacles.length-1; i >= 0; i--) {
+                    let obs = obstacles[i];
+                    let oLeft = obs.x - obs.width/2;
+                    let oRight = obs.x + obs.width/2;
+                    let oTop = obs.y - obs.height/2;
+                    let oBottom = obs.y + obs.height/2;
+
+                    if (playerLeft < oRight && playerRight > oLeft && playerTop < oBottom && playerBottom > oTop) {
+                        if (powerUpActive.shield) {
+                            // shield absorbs one hit
+                            powerUpActive.shield = false;
+                            powerUpTimer.shield = 0;
+                            obstacles.splice(i, 1);
+                        } else {
+                            gameActive = false;
+                            document.getElementById('restartBtn').classList.remove('hidden');
+                            break;
+                        }
+                    }
+                }
+
+                // Power-up timers
+                if (powerUpActive.shield) {
+                    powerUpTimer.shield--;
+                    if (powerUpTimer.shield <= 0) powerUpActive.shield = false;
+                }
+                if (powerUpActive.magnet) {
+                    powerUpTimer.magnet--;
+                    if (powerUpTimer.magnet <= 0) powerUpActive.magnet = false;
+                }
+
+                // Increment score over time
+                if (frame % 6 === 0 && gameActive) score += 1;
+
+                updateUI();
+                frame++;
+            }
+
+            // ========== RENDERING (4K Realistic Style) ==========
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Dynamic lighting / gradient background
+                let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                gradient.addColorStop(0, '#0b1a2e');
+                gradient.addColorStop(0.5, '#162b3c');
+                gradient.addColorStop(1, '#1d3b4f');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Subway tracks / perspective lines
+                ctx.save();
+                ctx.strokeStyle = '#557a9a';
+                ctx.lineWidth = 4;
+                for (let i = 0; i < 5; i++) {
+                    let x = (canvas.width / 5) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x - 50, canvas.height);
+                    ctx.strokeStyle = '#3d5e7a';
+                    ctx.globalAlpha = 0.3;
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                // Draw lanes glow
+                for (let i = 0; i < lanes.length; i++) {
+                    let x = lanes[i] * canvas.width;
+                    ctx.shadowColor = '#00a6ff';
+                    ctx.shadowBlur = 20;
+                    ctx.beginPath();
+                    ctx.moveTo(x - 5, 0);
+                    ctx.lineTo(x - 15, canvas.height);
+                    ctx.strokeStyle = '#5f9fff30';
+                    ctx.lineWidth = 12;
+                    ctx.stroke();
+                }
+                ctx.shadowBlur = 0;
+
+                // Draw collectibles with realistic 3D effect
+                for (let c of collectibles) {
+                    let x = c.x * canvas.width;
+                    let y = c.y * canvas.height;
+                    let sizeW = c.width * canvas.width;
+                    let sizeH = c.height * canvas.height;
+
+                    // glow
+                    ctx.shadowColor = c.type === 'coin' ? 'gold' : (c.type === 'shield' ? '#3a86ff' : '#c77dff');
+                    ctx.shadowBlur = 25;
+
+                    if (c.type === 'coin') {
+                        // 3D coin
+                        ctx.beginPath();
+                        ctx.ellipse(x, y, sizeW/2, sizeH/2, 0, 0, Math.PI * 2);
+                        ctx.fillStyle = '#f9d71c';
+                        ctx.fill();
+                        ctx.shadowBlur = 30;
+                        ctx.fillStyle = '#ffd966';
+                        ctx.beginPath();
+                        ctx.ellipse(x-3, y-2, sizeW/3, sizeH/3, 0, 0, Math.PI*2);
+                        ctx.fill();
+                    } else {
+                        // card style
+                        ctx.fillStyle = c.color;
+                        ctx.shadowColor = '#ffffff60';
+                        ctx.beginPath();
+                        ctx.roundRect(x - sizeW/2, y - sizeH/2, sizeW, sizeH, 10);
+                        ctx.fill();
+                        ctx.font = `${sizeH*0.7}px 'Segoe UI'`;
+                        ctx.fillStyle = 'white';
+                        ctx.shadowBlur = 15;
+                        ctx.fillText(c.icon, x - sizeW/3, y + sizeH/4);
+                    }
+                }
+
+                // Draw obstacles (trains)
+                for (let obs of obstacles) {
+                    let x = obs.x * canvas.width;
+                    let y = obs.y * canvas.height;
+                    let w = obs.width * canvas.width;
+                    let h = obs.height * canvas.height;
+
+                    ctx.shadowColor = '#ff0000aa';
+                    ctx.shadowBlur = 30;
+                    // metal texture
+                    let grad = ctx.createLinearGradient(x - w/2, y - h/2, x + w/2, y + h/2);
+                    grad.addColorStop(0, '#a14d4d');
+                    grad.addColorStop(1, '#6b2b2b');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.roundRect(x - w/2, y - h/2, w, h, 12);
+                    ctx.fill();
+                    // windows
+                    ctx.fillStyle = '#ffcf9a';
+                    ctx.shadowBlur = 10;
+                    ctx.fillRect(x - w/4, y - h/3, w/8, h/5);
+                    ctx.fillRect(x + w/8, y - h/3, w/8, h/5);
+                }
+
+                // Draw player (realistic runner)
+                let px = lanes[player.lane] * canvas.width;
+                let py = 0.9 * canvas.height; // fixed near bottom
+                let plWidth = 0.12 * canvas.width;
+                let plHeight = 0.16 * canvas.height;
+
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 40;
+                // body
+                let gradPlayer = ctx.createRadialGradient(px-10, py-10, 5, px, py, plWidth);
+                gradPlayer.addColorStop(0, '#f0f0f0');
+                gradPlayer.addColorStop(1, '#00c3ff');
+                ctx.fillStyle = gradPlayer;
+                ctx.beginPath();
+                ctx.ellipse(px, py - plHeight/3, plWidth/2, plHeight/2.5, 0, 0, Math.PI*2);
+                ctx.fill();
+
+                // legs
+                ctx.fillStyle = '#3a6ea5';
+                ctx.fillRect(px - plWidth/3, py - plHeight/6, plWidth/4, plHeight/2);
+                ctx.fillRect(px + plWidth/6, py - plHeight/6, plWidth/4, plHeight/2);
+
+                // shield aura
+                if (powerUpActive.shield) {
+                    ctx.shadowColor = '#3a86ff';
+                    ctx.shadowBlur = 60;
+                    ctx.beginPath();
+                    ctx.arc(px, py-10, plWidth*1.5, 0, Math.PI*2);
+                    ctx.strokeStyle = '#aaccff';
+                    ctx.lineWidth = 6;
+                    ctx.stroke();
+                }
+                if (powerUpActive.magnet) {
+                    ctx.shadowColor = '#aa5eff';
+                    ctx.shadowBlur = 50;
+                    ctx.beginPath();
+                    ctx.arc(px, py-10, plWidth*1.4, 0, Math.PI*2);
+                    ctx.strokeStyle = '#dbb2ff';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                }
+
+                ctx.shadowBlur = 0;
+                requestAnimationFrame(draw);
+            }
+
+            // helper for rounded rect
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                this.moveTo(x + r, y);
+                this.lineTo(x + w - r, y);
+                this.quadraticCurveTo(x + w, y, x + w, y + r);
+                this.lineTo(x + w, y + h - r);
+                this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                this.lineTo(x + r, y + h);
+                this.quadraticCurveTo(x, y + h, x, y + h - r);
+                this.lineTo(x, y + r);
+                this.quadraticCurveTo(x, y, x + r, y);
+                this.closePath();
+                return this;
+            };
+
+            // ========== TOUCH CONTROLS ==========
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+                touchMoved = false;
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!gameActive) return;
+                const touch = e.touches[0];
+                let dx = touch.clientX - touchStartX;
+                let dy = touch.clientY - touchStartY;
+
+                if (Math.abs(dx) > SWIPE_THRESHOLD && !touchMoved) {
+                    if (dx > 0 && player.lane < 3) {
+                        player.lane++;
+                    } else if (dx < 0 && player.lane > 0) {
+                        player.lane--;
+                    }
+                    touchMoved = true;
+                    touchStartX = touch.clientX; // reset
+                }
+
+                if (Math.abs(dy) > SWIPE_THRESHOLD && !touchMoved) {
+                    if (dy < -30) { // swipe up (jump / activate powerup)
+                        if (!powerUpActive.shield && !powerUpActive.magnet) {
+                            if (shields > 0) useShield();
+                            else if (magnets > 0) useMagnet();
+                        }
+                    }
+                    touchMoved = true;
+                    touchStartY = touch.clientY;
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                // optional tap for power?
+            });
+
+            // restart
+            document.getElementById('restartBtn').addEventListener('click', () => {
+                gameActive = true;
+                score = 0;
+                coins = 0;
+                shields = 0;
+                magnets = 0;
+                obstacles = [];
+                collectibles = [];
+                player.lane = 1;
+                powerUpActive = { shield: false, magnet: false };
+                powerUpTimer = { shield: 0, magnet: 0 };
+                gameSpeed = BASE_SPEED;
+                frame = 0;
+                document.getElementById('restartBtn').classList.add('hidden');
+                updateUI();
+            });
+
+            // keyboard fallback for testing on desktop
+            window.addEventListener('keydown', (e) => {
+                if (!gameActive) return;
+                if (e.key === 'ArrowLeft' && player.lane > 0) player.lane--;
+                if (e.key === 'ArrowRight' && player.lane < 3) player.lane++;
+                if (e.key === 'ArrowUp') {
+                    if (!powerUpActive.shield && !powerUpActive.magnet) {
+                        if (shields > 0) useShield();
+                        else if (magnets > 0) useMagnet();
+                    }
+                }
+            });
+
+            // start game loop
+            setInterval(() => {
+                updateGame();
+            }, 16); // ~60 fps
+
+            draw();
+            updateUI();
+        })();
+    </script>
+</body>
+  </html>
